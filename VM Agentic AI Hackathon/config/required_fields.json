@@ -1,0 +1,8 @@
+[
+    "claimant_name",
+    "policy_number",
+    "date_of_incident",
+    "incident_description",
+    "claim_amount",
+    "claimant_contact_email"
+]
