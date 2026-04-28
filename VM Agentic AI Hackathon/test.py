@@ -8,7 +8,7 @@ s3 = boto3.client("s3", region_name="us-east-1",
                   verify=False
                   )
 
-response = s3.list_objects_v2(Bucket="vm-kendra-chatbot-db-to-be-deleted")
+response = s3.list_objects_v2(Bucket="kendra-it-helpdesk-docs-development")
 
 for obj in response.get("Contents", []):
     print(obj["Key"])

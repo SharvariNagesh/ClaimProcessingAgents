@@ -1,7 +1,7 @@
 # agents/validation_agent.py
 import boto3
 import json
-from ..tools.aws_tools import REQUIRED_FIELDS
+from tools.aws_tools import REQUIRED_FIELDS
 
 bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
 
