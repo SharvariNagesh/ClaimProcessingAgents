@@ -1,8 +1,10 @@
 [
-    "claimant_name",
-    "policy_number",
-    "date_of_incident",
-    "incident_description",
-    "claim_amount",
-    "claimant_contact_email"
+    "Date of Loss",
+    "Reported By",
+    "Reported To",
+    "Vehicle",
+    "Driver",
+    "Vehicle Damage",
+    "Loss Description",
+    "Cause of Loss"
 ]

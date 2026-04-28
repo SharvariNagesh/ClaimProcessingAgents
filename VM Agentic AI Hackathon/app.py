@@ -69,7 +69,7 @@ with st.sidebar:
     
     s3_bucket = st.text_input(
         "S3 Bucket Name",
-        value=os.getenv("S3_BUCKET", "vm-kendra-chatbot-db-to-be-deleted"),
+        value=os.getenv("S3_BUCKET", "kendra-it-helpdesk-docs-development"),
         help="AWS S3 bucket containing claim PDFs"
     )
     
