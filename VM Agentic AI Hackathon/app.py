@@ -146,7 +146,7 @@ with tab1:
             # --- PROCESS BUTTON ---
             st.subheader("Step 2: Run Workflow")
             
-            if st.button("▶️ Process Claim", type="primary", use_container_width=True, key="process_btn"):
+            if st.button("▶️ Process Claim", type="primary", width="stretch", key="process_btn"):
                 with st.spinner("🔄 Processing claim... This may take 30-60 seconds"):
                     try:
                         # Run the LangGraph workflow
@@ -215,7 +215,7 @@ with tab2:
             
             st.dataframe(
                 field_data,
-                use_container_width=True,
+                width="stretch",
                 hide_index=True
             )
         
@@ -305,7 +305,7 @@ with tab3:
                 if st.button(
                     "✅ Approve & Save Email",
                     type="primary",
-                    use_container_width=True,
+                    width="stretch",
                     key="approve_btn"
                 ):
                     # Save to S3
@@ -345,7 +345,7 @@ with tab3:
             with col2:
                 if st.button(
                     "❌ Reject Draft",
-                    use_container_width=True,
+                    width="stretch",
                     key="reject_btn"
                 ):
                     st.warning("Draft email rejected. You can edit and try again.")

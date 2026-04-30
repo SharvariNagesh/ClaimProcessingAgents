@@ -3,12 +3,15 @@ import boto3
 from typing import List
 
 REQUIRED_FIELDS = [
-    "claimant_name",
-    "policy_number",
-    "date_of_incident",
-    "incident_description",
-    "claim_amount",
-    "claimant_contact_email"
+    "Policy Number",
+    "Date of Loss",
+    "Reported By",
+    "Reported To",
+    "Vehicle",
+    "Driver",
+    "Vehicle Damage",
+    "Loss Description",
+    "Cause of Loss"
 ]
 
 def get_s3_pdf_list(bucket: str, prefix: str = "", region: str = "us-east-1") -> List[str]:

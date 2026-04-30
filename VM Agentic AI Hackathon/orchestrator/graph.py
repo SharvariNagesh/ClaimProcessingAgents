@@ -48,7 +48,7 @@ def build_graph():
         route_after_validation,
         {
             "hitl_agent": "hitl_agent",
-            # "policy_agent": "policy_agent"
+            "policy_agent": "policy_agent"
         }
     )
     
@@ -56,8 +56,8 @@ def build_graph():
     graph.add_edge("hitl_agent", END)
     
     # Otherwise continue
-    # graph.add_edge("policy_agent", "inow_agent")
-    # graph.add_edge("inow_agent", END)
+    graph.add_edge("policy_agent", "inow_agent")
+    graph.add_edge("inow_agent", END)
     #
     return graph.compile()
 
