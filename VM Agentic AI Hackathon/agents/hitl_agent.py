@@ -1,12 +1,11 @@
 # agents/hitl_agent.py
 import boto3
-import json
 
-bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
+bedrock = boto3.client("bedrock-runtime", region_name="us-east-1",verify=False)
 
 def draft_missing_fields_email(missing_fields: list, claimant_email: str = "") -> str:
-    """Use Claude to draft a polite email requesting missing info."""
-    
+    """Use Claude / GPT to draft a polite email requesting missing info."""
+
     prompt = f"""
 Draft a professional, empathetic email to a claimant requesting the following missing information 
 from their claim submission. Be clear, concise, helpful, and friendly.
@@ -15,21 +14,29 @@ Missing fields: {', '.join(missing_fields)}
 
 Write only the email body. Keep it under 250 words. No subject line needed.
 """
-    
-    body = json.dumps({
-        "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 500,
-        "messages": [{"role": "user", "content": prompt}]
-    })
-    
-    response = bedrock.invoke_model(
-        modelId="anthropic.claude-3-5-sonnet-20241022-v2:0",
-        body=body,
-        contentType="application/json"
+
+    response = bedrock.converse(
+        modelId="openai.gpt-oss-120b-1:0",
+        messages=[
+            {
+                "role": "user",
+                "content": [{"text": prompt}]
+            }
+        ],
+        inferenceConfig={
+            "maxTokens": 2000,
+            "temperature": 0.5
+        }
     )
-    
-    result = json.loads(response["body"].read())
-    return result["content"][0]["text"]
+
+    print("Hackathon:", response)
+
+    # ✅ SAFE extraction of text (NO JSON PARSING)
+    content_items = response["output"]["message"]["content"]
+    email_text = next(item["text"] for item in content_items if "text" in item)
+
+    print("Extracted email body:", email_text)
+    return email_text
 
 def hitl_agent(state: dict) -> dict:
     """

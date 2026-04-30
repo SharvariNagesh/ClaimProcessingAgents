@@ -1,10 +1,8 @@
 [
+    "Policy Number",
     "Date of Loss",
     "Reported By",
     "Reported To",
-    "Vehicle",
-    "Driver",
-    "Vehicle Damage",
     "Loss Description",
     "Cause of Loss"
 ]
