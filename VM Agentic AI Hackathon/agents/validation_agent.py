@@ -1,10 +1,12 @@
 # agents/validation_agent.py
 import boto3
 import json
+
 from tools.aws_tools import REQUIRED_FIELDS
 
 session = boto3.Session(profile_name="suraj")
-bedrock = session.client("bedrock-runtime", region_name="us-east-1", verify=False)
+bedrock = session.client(
+    "bedrock-runtime", region_name="us-east-1")
 
 
 def extract_fields_with_llm(raw_text: str) -> dict:
@@ -32,7 +34,8 @@ Return only the JSON, nothing else.
     #         body=body,
     #         contentType="application/json"
     #     )
-    model_id ="openai.gpt-oss-120b-1:0"
+
+    model_id = "openai.gpt-oss-120b-1:0"
 
     response = bedrock.converse(
         modelId=model_id,

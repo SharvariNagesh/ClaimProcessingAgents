@@ -7,9 +7,6 @@ REQUIRED_FIELDS = [
     "Date of Loss",
     "Reported By",
     "Reported To",
-    "Vehicle",
-    "Driver",
-    "Vehicle Damage",
     "Loss Description",
     "Cause of Loss"
 ]
@@ -17,7 +14,7 @@ REQUIRED_FIELDS = [
 def get_s3_pdf_list(bucket: str, prefix: str = "", region: str = "us-east-1") -> List[str]:
     """List all PDF files in S3 bucket."""
     
-    s3 = boto3.client("s3", region_name=region, verify=False)
+    s3 = boto3.client("s3", region_name=region)
     
     try:
         response = s3.list_objects_v2(
