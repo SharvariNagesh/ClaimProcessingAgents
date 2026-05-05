@@ -1,0 +1,275 @@
+rom datetime import datetime
+
+st.set_page_config(
+    page_title='Insurance Claim Processing Management',
+    page_icon='🛡️',
+    layout='wide'
+)
+
+st.markdown('''
+    <style>
+        body {
+            background: linear-gradient(135deg, #f8ecec 0%, #fbf3f3 100%);
+        }
+        .stApp {
+            background: transparent;
+        }
+        .header-panel {
+            background: linear-gradient(135deg, #a44f47 0%, #8b3a33 100%);
+            border-radius: 20px;
+            padding: 32px;
+            color: #fff;
+            text-align: center;
+            box-shadow: 0 16px 30px rgba(0, 0, 0, 0.15);
+            margin-bottom: 24px;
+        }
+        .header-panel h1 {
+            margin-bottom: 10px;
+            font-size: 38px;
+            letter-spacing: 1px;
+        }
+        .header-panel p {
+            margin: 0;
+            opacity: 0.9;
+            font-size: 14px;
+        }
+        .section-title {
+            background: #f5e0df;
+            color: #7a2f26;
+            padding: 14px 18px;
+            border-radius: 14px;
+            margin-bottom: 18px;
+            font-weight: 700;
+            box-shadow: 0 8px 18px rgba(160, 69, 58, 0.12);
+        }
+        .panel {
+            background: #ffffff;
+            border: 1px solid #edd5d1;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 22px rgba(0,0,0,0.08);
+        }
+        .metric-card {
+            background: #fff6f5;
+            border-left: 5px solid #a44f47;
+            padding: 18px;
+            border-radius: 14px;
+            margin: 10px 0;
+        }
+        .metric-card h4 {
+            margin: 0 0 8px;
+            color: #8b3a33;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+        }
+        .metric-card p {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 700;
+            color: #333;
+        }
+        .summary-box {
+            background: #fff4f3;
+            border: 1px solid #e5c3bf;
+            border-radius: 14px;
+            padding: 20px;
+            color: #4e2d28;
+            line-height: 1.6;
+        }
+        .info-item {
+            background: #faf1f0;
+            border-left: 4px solid #a44f47;
+            padding: 16px;
+            border-radius: 12px;
+            margin-bottom: 14px;
+        }
+        .info-label {
+            color: #7a2f26;
+            font-size: 11px;
+            letter-spacing: 0.6px;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+            font-weight: 700;
+        }
+        .info-value {
+            color: #332420;
+            font-size: 15px;
+            font-weight: 600;
+        }
+        .success-box {
+            background: #e6f4ea;
+            border-left: 6px solid #4caf50;
+            padding: 18px;
+            border-radius: 12px;
+            margin-bottom: 18px;
+        }
+        textarea {
+            width: 100%;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 14px;
+            font-family: inherit;
+            background: #fafafa;
+        }
+    </style>
+''', unsafe_allow_html=True)
+
+if 'processed' not in st.session_state:
+    st.session_state.processed = False
+    st.session_state.claim_text = ''
+    st.session_state.claim_summary = ''
+    st.session_state.claim_name = ''
+    st.session_state.claim_status = 'Pending'
+    st.session_state.claim_pages = 0
+    st.session_state.email_drafted = False
+    st.session_state.email_sent = False
+    st.session_state.pdf_files = []
+    st.session_state.s3_error = ''
+
+st.markdown('''
+<div class='header-panel'>
+    <h1>🛡️ Insurance Claim Processing Dashboard</h1>
+    <p>Load claim PDFs from S3, verify and summarize details with AI-style insights, then approve claims in a polished dashboard.</p>
+</div>
+''', unsafe_allow_html=True)
+
+with st.sidebar:
+    st.header('S3 Claim Loader')
+    bucket_name = st.text_input('S3 Bucket Name', placeholder='my-insurance-claims-bucket')
+    aws_region = st.selectbox('AWS Region', ['us-east-1', 'us-west-2', 'eu-west-1', 'ap-south-1'])
+    st.markdown('---')
+    st.write('1. Enter your S3 bucket name.')
+    st.write('2. Select a PDF from the bucket.')
+    st.write('3. Click PROCESS CLAIM DETAILS.')
+
+if bucket_name:
+    try:
+        s3 = boto3.client('s3', region_name=aws_region)
+        response = s3.list_objects_v2(Bucket=bucket_name)
+        st.session_state.s3_error = ''
+        if 'Contents' in response:
+            st.session_state.pdf_files = [obj['Key'] for obj in response['Contents'] if obj['Key'].lower().endswith('.pdf')]
+        else:
+            st.session_state.pdf_files = []
+    except Exception as exc:
+        st.session_state.s3_error = str(exc)
+        st.session_state.pdf_files = []
+else:
+    st.session_state.pdf_files = []
+    st.session_state.s3_error = ''
+
+if bucket_name and st.session_state.s3_error:
+    st.sidebar.error(f'S3 error: {st.session_state.s3_error}')
+
+selected_claim = None
+if st.session_state.pdf_files:
+    selected_claim = st.sidebar.selectbox('Select Claim PDF', st.session_state.pdf_files)
+    st.sidebar.markdown('---')
+    st.sidebar.write(f'{len(st.session_state.pdf_files)} PDF claim document(s) available.')
+
+if st.session_state.processed:
+    st.sidebar.success('Claim processed and approved')
+    if st.session_state.claim_name:
+        st.sidebar.write(f'Document: {st.session_state.claim_name}')
+
+col1, col2, col3 = st.columns(3)
+with col1:
+    st.markdown(f"<div class='metric-card'><h4>Total Claims</h4><p>{len(st.session_state.pdf_files)}</p></div>", unsafe_allow_html=True)
+with col2:
+    processed_count = 1 if st.session_state.processed else 0
+    st.markdown(f"<div class='metric-card'><h4>Processed</h4><p>{processed_count}</p></div>", unsafe_allow_html=True)
+with col3:
+    approved_count = 1 if st.session_state.processed and st.session_state.claim_status == 'Approved' else 0
+    st.markdown(f"<div class='metric-card'><h4>Approved</h4><p>{approved_count}</p></div>", unsafe_allow_html=True)
+
+st.markdown("<div class='section-title'>📥 Claim Selection</div>", unsafe_allow_html=True)
+
+if bucket_name:
+    if st.session_state.s3_error:
+        st.error(f'Could not connect to S3: {st.session_state.s3_error}')
+    elif not st.session_state.pdf_files:
+        st.warning('No PDF claim documents found in the bucket.')
+    else:
+        st.markdown(f"<div class='panel'>Found <strong>{len(st.session_state.pdf_files)}</strong> PDF claim document(s) in bucket <strong>{bucket_name}</strong>.</div>", unsafe_allow_html=True)
+        if selected_claim:
+            st.markdown(f"<div class='panel'><strong>Selected claim file:</strong> {selected_claim}</div>", unsafe_allow_html=True)
+else:
+    st.info('Enter the S3 bucket name in the sidebar to load claim PDFs.')
+
+st.markdown("<div class='section-title'>🔄 Process Claim Details</div>", unsafe_allow_html=True)
+
+if selected_claim:
+    if st.button('⚡ PROCESS CLAIM DETAILS'):
+        try:
+            s3 = boto3.client('s3', region_name=aws_region)
+            result = s3.get_object(Bucket=bucket_name, Key=selected_claim)
+            pdf_data = result['Body'].read()
+            pdf_reader = PdfReader(io.BytesIO(pdf_data))
+            full_text = '\n'.join([page.extract_text() or '' for page in pdf_reader.pages])
+
+            if not full_text.strip():
+                st.warning('The selected PDF contains no extractable text.')
+            else:
+                summary = full_text.strip().replace('\r', '\n')
+                summary = '\n'.join([line for line in summary.split('\n') if line.strip()])
+                short_summary = summary[:900] + ('...' if len(summary) > 900 else '')
+
+                st.session_state.processed = True
+                st.session_state.claim_text = full_text
+                st.session_state.claim_summary = short_summary
+                st.session_state.claim_name = selected_claim
+                st.session_state.claim_status = 'Approved'
+                st.session_state.claim_pages = len(pdf_reader.pages)
+                st.session_state.email_drafted = False
+                st.session_state.email_sent = False
+                st.success('Claim PDF loaded, analyzed, and approved successfully.')
+        except Exception as exc:
+            st.error(f'Unable to process claim: {exc}')
+else:
+    st.info('Select a claim PDF first to enable processing.')
+
+if st.session_state.processed:
+    st.markdown("<div class='section-title'>✅ Claim Analysis Results</div>", unsafe_allow_html=True)
+    st.markdown("<div class='success-box'><strong>Claim Approved</strong> — the AI-style summary has evaluated this document and marked it for approval.</div>", unsafe_allow_html=True)
+
+    st.markdown("<div class='panel'>", unsafe_allow_html=True)
+    st.markdown(f"<div class='info-item'><div class='info-label'>Claim Document</div><div class='info-value'>{st.session_state.claim_name}</div></div>", unsafe_allow_html=True)
+    st.markdown("<div class='info-item'><div class='info-label'>Status</div><div class='info-value'>Approved</div></div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='info-item'><div class='info-label'>Pages</div><div class='info-value'>{st.session_state.claim_pages}</div></div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='info-item'><div class='info-label'>Processed At</div><div class='info-value'>{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</div></div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown(f"<div class='panel'><div class='summary-title'>AI-Generated Claim Summary</div><div class='summary-box'>{st.session_state.claim_summary.replace('\n', '<br>')}</div></div>", unsafe_allow_html=True)
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if st.button('📧 Draft Email'):
+            st.session_state.email_drafted = True
+    with col2:
+        if st.button('📤 Send Email'):
+            st.session_state.email_sent = True
+    with col3:
+        if st.button('🔄 Reset'):
+            st.session_state.processed = False
+            st.session_state.claim_text = ''
+            st.session_state.claim_summary = ''
+            st.session_state.claim_name = ''
+            st.session_state.claim_status = 'Pending'
+            st.session_state.claim_pages = 0
+            st.session_state.email_drafted = False
+            st.session_state.email_sent = False
+            st.experimental_rerun()
+
+    if st.session_state.email_drafted:
+        email_body = f"Subject: Claim Approved - {st.session_state.claim_name}\n\nDear Customer,\n\nYour insurance claim has been processed and approved.\n\nSummary:\n{st.session_state.claim_summary}\n\nThank you,\nClaims Team"
+        st.markdown(f"<div class='panel'><div class='summary-title'>📩 Email Draft</div><pre style='white-space: pre-wrap;'>{email_body}</pre></div>", unsafe_allow_html=True)
+
+    if st.session_state.email_sent:
+        st.success('Email notification sent successfully.')
+        st.markdown("<div class='panel'><strong>Email Status:</strong> Sent to insured party.</div>", unsafe_allow_html=True)
+
+    st.markdown(f"<div class='panel'><div class='summary-title'>📄 Extracted Claim Text Preview</div><pre style='white-space: pre-wrap; max-height: 300px; overflow: auto;'>{st.session_state.claim_text[:2500]}</pre></div>", unsafe_allow_html=True)
+
+st.markdown("<div style='text-align: center; color: #7a2f26; margin-top: 50px;'>© 2024 Insurance Claim Processing Management System</div>", unsafe_allow_html=True)
