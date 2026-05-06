@@ -194,7 +194,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ===== TABS =====
-tab1, tab2, tab3 = st.tabs(["  📁  Process Claim  ", "  📊  View Results  ", "  ✉️  Draft Email  ", " 🕵️ Adjuster Allocation"])
+tab1, tab2, tab3, tab4 = st.tabs(["  📁  Process Claim  ", "  📊  View Results  ", "  ✉️  Draft Email  ", " 🕵️ Adjuster Allocation"])
 
 # ══════════════════════════════════════════════════════════
 #  TAB 1 — Process Claim
