@@ -12,6 +12,8 @@ def fetch_policy_document(state: dict) -> str:
     s3 = boto3.client("s3", region_name="us-east-1")
 
     policy_pdf = "Policy/HP00000282-policy_document.pdf"
+    print(f"🔍 Attempting to fetch S3 key: {policy_pdf}")  # add this
+
 
     response = s3.get_object(
         Bucket="kendra-it-helpdesk-docs-development",
@@ -127,7 +129,7 @@ def reconstruct_paragraphs(text: str) -> str:
 def policy_agent(state: dict) -> dict:
     """Fetch policy and extract relevant sections."""
     print(state)
-    
+
     policy_number = state["extracted_fields"].get("policy_number", "UNKNOWN")
 
     incident_desc= state["extracted_fields"]["Cause of Loss"]
