@@ -6,20 +6,25 @@ import os
 from datetime import datetime
 from orchestrator.graph import run_claim_workflow
 from tools.aws_tools import get_s3_pdf_list
+from agents.adjuster_agent import adjuster_agent
 
 # ===== PAGE CONFIG =====
+# st.set_page_config(
+#     page_title="Claims Processor",
+#     page_icon="📋",
+#     layout="wide",
+#     initial_sidebar_state="expanded"
+# )
 st.set_page_config(
-    page_title="Claims Processor",
-    page_icon="📋",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    page_title='Insurance Claim Processing Management',
+    page_icon='🛡️',
+    layout='wide'
 )
-
 # ===== CUSTOM CSS =====
 st.markdown("""
 <style>
     .header-main {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: rgb(178, 34, 34);
         color: white;
         padding: 40px;
         border-radius: 10px;
@@ -112,7 +117,7 @@ st.markdown("""
 st.header("🚀 Process Claim")
 
 # --- TAB 1: SELECT & PROCESS ---
-tab1, tab2, tab3 = st.tabs(["Process Claim", "View Results", "Draft Email"])
+tab1, tab2, tab3, tab4 = st.tabs(["Process Claim", "View Results", "Draft Email", "Assign Adjuster"])
 
 with tab1:
     st.subheader("Step 1: Select Claim PDF")
@@ -309,8 +314,8 @@ with tab3:
                     key="approve_btn"
                 ):
                     # Save to S3
-                    s3 = boto3.client("s3", region_name=aws_region)
-                    
+                    s3 = boto3.client("s3", region_name=aws_region, verify=False)
+
                     claim_name = st.session_state.selected_claim.split("/")[-1].replace(".pdf", "")
                     draft_key = f"drafts/{claim_name}_email_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
                     
@@ -350,6 +355,67 @@ with tab3:
                 ):
                     st.warning("Draft email rejected. You can edit and try again.")
 
+with tab4:
+    st.subheader("🤖 Agentic Adjuster Assignment")
+
+    if st.session_state.workflow_result is None:
+        st.info("Process a claim first.")
+    else:
+        state = st.session_state.workflow_result
+
+
+    # --- Run agent once ---
+        if "recommended_adjuster" not in state:
+            with st.spinner("Agent analyzing claim and routing adjuster..."):
+                updated_state = adjuster_agent(state)
+                st.session_state.workflow_result = updated_state
+                st.rerun()
+
+        recommendation = st.session_state.workflow_result.get("recommended_adjuster")
+        evaluation = st.session_state.workflow_result.get("adjuster_evaluation", [])
+
+        if not recommendation:
+            st.error("No suitable adjuster found.")
+        else:
+            # --- Recommendation ---
+            st.markdown("### ✅ Agent Recommendation")
+
+            st.success(
+                f"**{recommendation['name']}** "
+                f"(Score: {recommendation['score']})"
+            )
+
+            st.markdown("**Reasoning:**")
+            for r in recommendation["reasons"]:
+                st.markdown(f"- {r}")
+
+            st.divider()
+
+            # --- Human Override ---
+            st.markdown("### 👤 Human Review & Override")
+
+            options = {
+                f"{e['adjuster']['name']} (Score {e['score']})": e["adjuster"]
+                for e in evaluation
+            }
+
+            selected = st.selectbox(
+                "Select Adjuster (optional override)",
+                options=list(options.keys()),
+                index=0
+            )
+
+            chosen_adjuster = options[selected]
+
+            if st.button("✅ Assign Adjuster", type="primary", width="stretch"):
+                st.session_state.workflow_result["assigned_adjuster"] = {
+                    "id": chosen_adjuster["id"],
+                    "name": chosen_adjuster["name"],
+                    "assigned_by": "HUMAN_IN_LOOP",
+                    "assigned_at": datetime.utcnow().isoformat()
+                }
+
+                st.success(f"Assigned {chosen_adjuster['name']} to this claim")
 # ===== FOOTER =====
 st.divider()
 

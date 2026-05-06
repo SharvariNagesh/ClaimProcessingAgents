@@ -1,15 +1,14 @@
 # agents/policy_agent.py
 import boto3
-import json
 import fitz
 import re
 
-bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
+bedrock = boto3.client("bedrock-runtime", region_name="us-east-1",verify=False)
 
 def fetch_policy_document(state: dict) -> str:
     """Extract text from PDF in S3."""
 
-    s3 = boto3.client("s3", region_name="us-east-1")
+    s3 = boto3.client("s3", region_name="us-east-1",verify=False)
 
     policy_pdf = "Policy/HP00000282-policy_document.pdf"
 
@@ -38,7 +37,7 @@ def extract_relevant_policy_sections(policy_doc: str, claim_description: str, re
     prompt = f"""
 You are an insurance policy analyst. Given the policy document and claim description,
 identify and extract ONLY the policy sections relevant to processing this claim.
-Format as a clear bulleted list with section names and key clauses in markdown format.
+Format as a clear bulleted list with section names and key clauses.
 
 Claim Description: {claim_description[:500]}
 
@@ -127,7 +126,7 @@ def reconstruct_paragraphs(text: str) -> str:
 def policy_agent(state: dict) -> dict:
     """Fetch policy and extract relevant sections."""
     print(state)
-    
+
     policy_number = state["extracted_fields"].get("policy_number", "UNKNOWN")
 
     incident_desc= state["extracted_fields"]["Cause of Loss"]
