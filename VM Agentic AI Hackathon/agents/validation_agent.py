@@ -6,7 +6,7 @@ from tools.aws_tools import REQUIRED_FIELDS
 
 session = boto3.Session(profile_name="suraj")
 bedrock = session.client(
-    "bedrock-runtime", region_name="us-east-1")
+    "bedrock-runtime", region_name="us-east-1", verify = False)
 
 
 def extract_fields_with_llm(raw_text: str) -> dict:
