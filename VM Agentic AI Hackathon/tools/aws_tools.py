@@ -15,7 +15,10 @@ REQUIRED_FIELDS = [
     "Reported By",
     "Reported To",
     "Loss Description",
-    "Cause of Loss"
+    "Cause of Loss",
+    "Location of Loss",
+    "State of Loss Location",
+    "Claim Type"
 ]
 
 def get_s3_pdf_list(bucket: str, prefix: str = "", region: str = "us-east-1") -> List[str]:

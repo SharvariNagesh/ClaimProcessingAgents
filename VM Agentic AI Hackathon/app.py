@@ -7,16 +7,17 @@ from datetime import datetime
 from orchestrator.graph import run_claim_workflow
 from tools.aws_tools import get_s3_pdf_list
 from agents.hitl_agent import draft_missing_fields_email
+from agents.adjuster_agent import adjuster_agent
 
 # ===== PAGE CONFIG =====
 st.set_page_config(
     page_title="Claims Processing Center",
-    page_icon="📋",
+    page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# ===== DESIGN SYSTEM =====
+# ===== CUSTOM CSS =====
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -162,6 +163,7 @@ with st.sidebar:
     st.markdown("**Required Fields**")
     with open("config/required_fields.json", "r") as f:
         required_fields = json.load(f)
+    
     st.json(required_fields, expanded=False)
     st.markdown("---")
     st.markdown("""
@@ -192,7 +194,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ===== TABS =====
-tab1, tab2, tab3 = st.tabs(["  📁  Process Claim  ", "  📊  View Results  ", "  ✉️  Draft Email  "])
+tab1, tab2, tab3 = st.tabs(["  📁  Process Claim  ", "  📊  View Results  ", "  ✉️  Draft Email  ", " 🕵️ Adjuster Allocation"])
 
 # ══════════════════════════════════════════════════════════
 #  TAB 1 — Process Claim
@@ -203,6 +205,7 @@ with tab1:
     st.markdown('<div class="step-title">Select a Claim PDF from S3</div>', unsafe_allow_html=True)
     try:
         pdf_list = get_s3_pdf_list(s3_bucket, region=aws_region)
+        
         if not pdf_list:
             st.warning("No PDF files found in the S3 bucket. Please upload claim PDFs first.")
         else:
@@ -324,6 +327,13 @@ with tab2:
                 </div>
             </div>
             """, unsafe_allow_html=True)
+            
+            missing = result["missing_fields"]
+            for field in missing:
+                st.warning(f"❌ {field}")
+            
+            st.info("📧 A draft email has been prepared to request these missing fields. See the 'Draft Email' tab.")
+        
         else:
             st.markdown("""
             <div class="alert alert-success" style="margin-top:16px;">
@@ -343,6 +353,8 @@ with tab2:
 #  TAB 3 — Draft Email
 # ══════════════════════════════════════════════════════════
 with tab3:
+    st.subheader("📧 Draft Email (Human Review)")
+    
     if st.session_state.workflow_result is None:
         st.markdown("""
         <div class="alert alert-info" style="margin-top:12px;">
@@ -361,6 +373,7 @@ with tab3:
                 All required fields are present — no follow-up email is required.
             </div>
             """, unsafe_allow_html=True)
+        
         else:
             pills = "".join(f'<span class="field-pill">❌ {f}</span>' for f in missing)
             st.markdown(f"""
@@ -448,6 +461,67 @@ with tab3:
                         st.warning("Draft rejected. Click 'Yes, Generate Draft Email' to try again.")
                         st.rerun()
 
+with tab4:
+    st.subheader("🤖 Agentic Adjuster Assignment")
+
+    if st.session_state.workflow_result is None:
+        st.info("Process a claim first.")
+    else:
+        state = st.session_state.workflow_result
+
+
+    # --- Run agent once ---
+        if "recommended_adjuster" not in state:
+            with st.spinner("Agent analyzing claim and routing adjuster..."):
+                updated_state = adjuster_agent(state)
+                st.session_state.workflow_result = updated_state
+                st.rerun()
+
+        recommendation = st.session_state.workflow_result.get("recommended_adjuster")
+        evaluation = st.session_state.workflow_result.get("adjuster_evaluation", [])
+
+        if not recommendation:
+            st.error("No suitable adjuster found.")
+        else:
+            # --- Recommendation ---
+            st.markdown("### ✅ Agent Recommendation")
+
+            st.success(
+                f"**{recommendation['name']}** "
+                f"(Score: {recommendation['score']})"
+            )
+
+            st.markdown("**Reasoning:**")
+            for r in recommendation["reasons"]:
+                st.markdown(f"- {r}")
+
+            st.divider()
+
+            # --- Human Override ---
+            st.markdown("### 👤 Human Review & Override")
+
+            options = {
+                f"{e['adjuster']['name']} (Score {e['score']})": e["adjuster"]
+                for e in evaluation
+            }
+
+            selected = st.selectbox(
+                "Select Adjuster (optional override)",
+                options=list(options.keys()),
+                index=0
+            )
+
+            chosen_adjuster = options[selected]
+
+            if st.button("✅ Assign Adjuster", type="primary", width="stretch"):
+                st.session_state.workflow_result["assigned_adjuster"] = {
+                    "id": chosen_adjuster["id"],
+                    "name": chosen_adjuster["name"],
+                    "assigned_by": "HUMAN_IN_LOOP",
+                    "assigned_at": datetime.utcnow().isoformat()
+                }
+
+                st.success(f"Assigned {chosen_adjuster['name']} to this claim")
 # ===== FOOTER =====
 st.markdown("""
 <div class="footer-bar">

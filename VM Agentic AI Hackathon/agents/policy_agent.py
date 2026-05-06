@@ -4,12 +4,12 @@ import json
 import fitz
 import re
 
-bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
+bedrock = boto3.client("bedrock-runtime", region_name="us-east-1",verify=False)
 
 def fetch_policy_document(state: dict) -> str:
     """Extract text from PDF in S3."""
 
-    s3 = boto3.client("s3", region_name="us-east-1")
+    s3 = boto3.client("s3", region_name="us-east-1",verify=False)
 
     policy_pdf = "Policy/HP00000282-policy_document.pdf"
     print(f"🔍 Attempting to fetch S3 key: {policy_pdf}")  # add this
