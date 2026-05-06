@@ -252,13 +252,13 @@ with tab2:
             st.markdown("""
             The following policy sections are relevant to this claim:
             """)
-            
-            st.text_area(
-                "Policy Analysis",
-                value=result["relevant_policy_sections"],
-                height=250,
-                disabled=True
-            )
+            st.markdown(result["relevant_policy_sections"])
+            # st.text_area(
+            #     "Policy Analysis",
+            #     value=result["relevant_policy_sections"],
+            #     height=250,
+            #     disabled=True
+            # )
         
         # --- RAW RESULT (for debugging) ---
         with st.expander("🔍 Raw Workflow Data (JSON)"):

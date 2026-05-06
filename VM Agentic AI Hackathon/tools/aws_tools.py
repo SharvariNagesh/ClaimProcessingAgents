@@ -49,3 +49,12 @@ def upload_file_to_s3(bucket: str, key: str, data: bytes, region: str = "us-east
     
     s3 = boto3.client("s3", region_name=region, verify=False)
     s3.put_object(Bucket=bucket, Key=key, Body=data)
+
+def download_policy_file_from_s3(bucket: str, key: str, region: str = "us-east-1") -> bytes:
+    """Download Policy file from S3."""
+
+    policy_pdf = "Policy/HP00000282-policy.pdf"
+    s3 = boto3.client("s3", region_name=region)
+    obj = s3.get_object(Bucket=bucket, Key=policy_pdf)
+    return obj["Body"].read()
+
