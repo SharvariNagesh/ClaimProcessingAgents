@@ -7,6 +7,7 @@ from agents.validation_agent import validation_agent
 from agents.hitl_agent import hitl_agent
 from agents.policy_agent import policy_agent
 from agents.inow_agent import inow_agent
+from agents.adjuster_agent import adjuster_agent
 
 class ClaimState(TypedDict):
     bucket: str
@@ -37,8 +38,9 @@ def build_graph():
     graph.add_node("hitl_agent", hitl_agent)
     graph.add_node("policy_agent", policy_agent)
     graph.add_node("inow_agent", inow_agent)
-    
-    # Define flow
+    graph.add_node("adjuster_agent", adjuster_agent)
+
+# Define flow
     graph.set_entry_point("extraction_agent")
     graph.add_edge("extraction_agent", "validation_agent")
     graph.add_edge("validation_agent", END)
@@ -57,7 +59,8 @@ def build_graph():
     
     # Otherwise continue
     graph.add_edge("policy_agent", "inow_agent")
-    graph.add_edge("inow_agent", END)
+    graph.add_edge("inow_agent","adjuster_agent")
+    graph.add_edge("adjuster_agent", END)
     #
     return graph.compile()
 

@@ -1,16 +1,15 @@
 # agents/policy_agent.py
 import boto3
-import json
 import fitz
 
-bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
+bedrock = boto3.client("bedrock-runtime", region_name="us-east-1",verify=False)
 
 def fetch_policy_document(state: dict) -> str:
     """Extract text from PDF in S3."""
 
-    s3 = boto3.client("s3", region_name="us-east-1")
+    s3 = boto3.client("s3", region_name="us-east-1",verify=False)
 
-    policy_pdf = "Policy/HP00000282-policy.pdf"
+    policy_pdf = "Policy/HP00000282-policy_document.pdf"
 
     response = s3.get_object(
         Bucket="kendra-it-helpdesk-docs-development",
@@ -67,7 +66,8 @@ Return only relevant sections. Be concise. Under 300 words.
     )
 
     extracted_text = response
-
+    json_text = response["output"]["message"]["content"][1]["text"]
+    extracted_text = json_text
     print("extracted_text: ",extracted_text)
     print("✅ policy Section extracted")
     return extracted_text

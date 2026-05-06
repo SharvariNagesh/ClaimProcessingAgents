@@ -6,7 +6,7 @@ from tools.aws_tools import REQUIRED_FIELDS
 
 session = boto3.Session(profile_name="suraj")
 bedrock = session.client(
-    "bedrock-runtime", region_name="us-east-1")
+    "bedrock-runtime", region_name="us-east-1",verify=False)
 
 
 def extract_fields_with_llm(raw_text: str) -> dict:
@@ -22,18 +22,6 @@ Document text:
 ---
 Return only the JSON, nothing else.
 """
-    
-    # body = json.dumps({
-    #     "anthropic_version": "bedrock-2023-05-31",
-    #     "max_tokens": 800,
-    #     "messages": [{"role": "user", "content": prompt}]
-    # })
-
-    # response = bedrock.invoke_model(
-    #         modelId=model_id,
-    #         body=body,
-    #         contentType="application/json"
-    #     )
 
     model_id = "openai.gpt-oss-120b-1:0"
 
