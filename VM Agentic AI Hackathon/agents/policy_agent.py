@@ -40,7 +40,7 @@ def extract_relevant_policy_sections(policy_doc: str, claim_description: str, re
     prompt = f"""
 You are an insurance policy analyst. Given the policy document and claim description,
 identify and extract ONLY the policy sections relevant to processing this claim.
-Format as a clear bulleted list with section names and key clauses in markdown format.
+Format as a clear bulleted list with section names and key clauses.
 
 Claim Description: {claim_description[:500]}
 

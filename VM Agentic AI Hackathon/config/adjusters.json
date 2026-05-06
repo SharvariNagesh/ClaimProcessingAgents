@@ -1,0 +1,29 @@
+[
+    {
+    "id": "ADJ001",
+    "name": "John Miller",
+    "regions": ["VT", "NH", "ME"],
+    "claim_types": ["Property", "Wind", "Hail"],
+    "phone": "555-321-9876",
+    "email": "john.miller@insureco.com",
+    "experience_years": 12
+    },
+    {
+        "id": "ADJ002",
+        "name": "Sarah Thompson",
+        "regions": ["CT", "NH", "NY"],
+        "claim_types": ["Fire", "Property"],
+        "phone": "555-987-1234",
+        "email": "sarah.thompson@insureco.com",
+        "experience_years": 9
+    },
+    {
+        "id": "ADJ003",
+        "name": "Jacky Doe",
+        "regions": ["NY", "NJ", "MA"],
+        "claim_types": ["Auto", "Liability"],
+        "phone": "555-654-3321",
+        "email": "jacky.doe@insureco.com",
+        "experience_years": 15
+    }
+]
