@@ -1,70 +1,68 @@
 from datetime import datetime
 import json
-def adjuster_agent(state: dict) -> dict:
+import boto3
 
+bedrock = boto3.client("bedrock-runtime", region_name="us-east-1", verify=False)
+
+
+def score_adjusters_with_llm(adjusters: list, extracted_fields: dict) -> list:
+    """Use LLM to score and rank adjusters based on claim context."""
+
+    prompt = f"""
+You are an insurance claims manager. Score each adjuster below (0-100) based on how well they match this claim.
+Consider: geographic region, claim type expertise, loss complexity, and experience years.
+
+Claim Details:
+{json.dumps(extracted_fields, indent=2)}
+
+Adjusters:
+{json.dumps(adjusters, indent=2)}
+
+Return ONLY a valid JSON array, one object per adjuster, in descending score order:
+[
+  {{
+    "id": "<adjuster id>",
+    "score": <0-100>,
+    "reasons": ["<reason1>", "<reason2>"]
+  }}
+]
+Return only the JSON array, nothing else.
+"""
+
+    response = bedrock.converse(
+        modelId="openai.gpt-oss-120b-1:0",
+        messages=[{"role": "user", "content": [{"text": prompt}]}],
+        inferenceConfig={"maxTokens": 1000, "temperature": 0.3}
+    )
+
+    content_items = response["output"]["message"]["content"]
+    raw = next(item["text"] for item in content_items if "text" in item)
+    llm_scores = json.loads(raw)
+
+    adj_map = {a["id"]: a for a in adjusters}
+    return [
+        {
+            "adjuster": adj_map[item["id"]],
+            "score": item["score"],
+            "reasons": item["reasons"]
+        }
+        for item in llm_scores
+        if item["id"] in adj_map
+    ]
+
+
+def adjuster_agent(state: dict) -> dict:
+    """LLM-powered adjuster assignment based on claim context."""
 
     with open("config/adjusters.json") as f:
         adjusters = json.load(f)
-    """
-    Agentic adjuster assignment based on claim context.
-    """
+
     extracted = state.get("extracted_fields", {})
-    claim_type = extracted.get("Claim Type", "").lower()
-    address = (extracted.get("State of Loss Location") or "").upper()
-    loss_desc = (extracted.get("Loss Description") or "").lower()
-
-    scored = []
-
-    for adj in adjusters:
-        score = 0
-        reasons = []
-
-        matched_region = next(
-            (r for r in adj["regions"] if r in address),
-            None
-        )
-
-        if matched_region:
-            score += 40
-            reasons.append(f"Region match: {matched_region}")
-
-            # --- Claim type match ---
-        matched_claim_type = next(
-            (ct for ct in adj["claim_types"] if ct.lower() in claim_type),
-            None
-        )
-
-        if matched_claim_type:
-            score += 30
-            reasons.append(f"Claim type expertise: {matched_claim_type}")
-
-        complex_reasons = []
-
-        if "tree" in loss_desc:
-            complex_reasons.append("tree damage")
-
-        if "structure" in loss_desc:
-            complex_reasons.append("structure damage")
-
-        if complex_reasons and adj["experience_years"] >= 10:
-            score += 10
-            reasons.append(
-                f"Complex loss experience ({', '.join(complex_reasons)}, "
-                f"{adj['experience_years']} yrs exp)"
-            )
-        # --- Experience heuristic ---
-            score += min(adj["experience_years"], 20)
-            # reasons.append("Experience weighting", adj["experience_years"])
-
-        scored.append({
-            "adjuster": adj,
-            "score": score,
-            "reasons": reasons
-        })
-
-    ranked = sorted(scored, key=lambda x: x["score"], reverse=True)
-
+    ranked = score_adjusters_with_llm(adjusters, extracted)
     recommendation = ranked[0] if ranked else None
+
+    print(f"✅ Adjuster Agent: LLM ranked {len(ranked)} adjusters")
+
     return {
         **state,
         "adjuster_evaluation": ranked,
