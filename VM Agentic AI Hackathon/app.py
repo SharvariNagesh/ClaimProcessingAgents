@@ -284,7 +284,7 @@ with tab1:
     """, unsafe_allow_html=True)
 
     st.markdown('<span class="step-title">Run the AI Workflow</span>', unsafe_allow_html=True)
-    st.markdown('<span class="step-desc">The AI will extract text from the PDF, validate all required fields using Claude, and flag any missing information for human review.</span>', unsafe_allow_html=True)
+    st.markdown('<span class="step-desc">The AI will extract text from the PDF, validate all required fields using OpenAI LLM model, and flag any missing information for human review.</span>', unsafe_allow_html=True)
 
     col1, col2 = st.columns(2)
     with col1:
