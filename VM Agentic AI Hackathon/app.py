@@ -3,6 +3,7 @@ import streamlit as st
 import boto3
 import json
 import os
+import streamlit.components.v1 as components
 from datetime import datetime
 from orchestrator.graph import (
     run_claim_workflow_phase1,
@@ -35,6 +36,7 @@ st.markdown("""
     }
     #MainMenu { visibility: hidden; }
     footer { visibility: hidden; }
+    .stDeployButton { display: none !important; }
     .stApp { background: #F5F5F5; }
     /* ── Hide sidebar and toggle button completely ── */
     section[data-testid="stSidebar"] { display: none !important; }
@@ -215,7 +217,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ===== SIDEBAR =====
 # ===== SESSION STATE =====
 for key, default in {
     "workflow_result": None,
@@ -290,9 +291,14 @@ with tab1:
     with col1:
         process_clicked = st.button("▶ Process Claim", type="primary", key="process_btn")
     with col2:
+        # ── CHANGE 1: JS click on the View Results tab (index 1) ──
         if st.session_state.workflow_result is not None:
             if st.button("→ View Results", key="goto_results_btn"):
-                st.info("Click the **View Results** tab above to see results.")
+                components.html("""
+                                <script>
+                                    window.parent.document.querySelectorAll('[data-baseweb="tab"]')[1].click();
+                                </script>
+                                """, height=0)
 
     if process_clicked:
         if not st.session_state.get("selected_claim"):
@@ -370,15 +376,23 @@ with tab2:
 
         # ── Missing fields path ──
         if missing:
-            pills = "".join(f'<span class="field-pill">✕ {f}</span>' for f in missing)
-            st.markdown(f"""
-            <div class="alert alert-warning" style="margin-top:12px;">
-                <div class="alert-title">⚠ Missing Fields Detected</div>
-                <div style="margin-bottom:8px;">The following required fields were not found in the document:</div>
-                {pills}
-                <div style="margin-top:10px;">Go to the <b>Draft Email</b> tab to generate a follow-up email to the claimant.</div>
-            </div>
-            """, unsafe_allow_html=True)
+                    pills = "".join(f'<span class="field-pill">✕ {f}</span>' for f in missing)
+                    st.markdown(f"""
+                    <div class="alert alert-warning" style="margin-top:12px;">
+                        <div class="alert-title">⚠ Missing Fields Detected</div>
+                        <div style="margin-bottom:8px;">The following required fields were not found in the document:</div>
+                        {pills}
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("✉️ Go to Draft Email →", type="primary", key="goto_email_btn"):
+                            components.html("""
+                            <script>
+                                window.parent.document.querySelectorAll('[data-baseweb="tab"]')[2].click();
+                            </script>
+                            """, height=0)
 
         # ── All fields present — stepped human flow ──
         else:
@@ -424,8 +438,52 @@ with tab2:
                         st.rerun()
             else:
                 if result.get("relevant_policy_sections"):
-                    st.markdown('<div class="section-heading">Relevant Policy Sections</div>', unsafe_allow_html=True)
-                    st.markdown(f'<div style="font-size:0.95rem;line-height:1.7;color:#333;">{result["relevant_policy_sections"]}</div>', unsafe_allow_html=True)
+                                    st.markdown('<div class="section-heading">Relevant Policy Sections</div>', unsafe_allow_html=True)
+
+                                    import re
+                                    raw = result["relevant_policy_sections"]
+
+                                    # Convert markdown bold (**text**) to <strong>
+                                    raw = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', raw)
+                                    # Convert markdown italic (*text* or _text_) to <em>
+                                    raw = re.sub(r'\*(.*?)\*', r'\1', raw)
+                                    # Convert leading bullet dashes to proper list items
+                                    lines = raw.split('\n')
+                                    html_lines = []
+                                    in_list = False
+                                    for line in lines:
+                                        stripped = line.strip()
+                                        if stripped.startswith('- '):
+                                            if not in_list:
+                                                html_lines.append('<ul style="margin:10px 0 10px 18px;padding:0;">')
+                                                in_list = True
+                                            html_lines.append(f'<li style="margin-bottom:8px;">{stripped[2:]}</li>')
+                                        else:
+                                            if in_list:
+                                                html_lines.append('</ul>')
+                                                in_list = False
+                                            if stripped:
+                                                html_lines.append(f'<p style="margin:0 0 10px 0;">{stripped}</p>')
+                                    if in_list:
+                                        html_lines.append('</ul>')
+                                    formatted = ''.join(html_lines)
+
+                                    st.markdown(f"""
+                                    <div style="
+                                        background: #FFFFFF;
+                                        border: 1px solid #DDDDDD;
+                                        border-left: 4px solid #B22020;
+                                        border-radius: 4px;
+                                        padding: 20px 24px;
+                                        margin-top: 10px;
+                                        font-size: 0.95rem;
+                                        line-height: 1.7;
+                                        color: #1a1a1a;
+                                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                                    ">
+                                        {formatted}
+                                    </div>
+                                    """, unsafe_allow_html=True)
                 else:
                     st.markdown("""
                     <div class="alert alert-info">
@@ -474,15 +532,14 @@ with tab2:
                     </div>
                     """, unsafe_allow_html=True)
 
-            # ══ After Step 4 — point user to Adjuster tab ══
+            # ══ After Step 4 — CHANGE 2: button that JS-clicks the Adjuster Allocation tab (index 3) ══
             if phase >= 3:
-                st.markdown("""
-                <div class="alert alert-info" style="margin-top:16px;">
-                    <div class="alert-title">🕵️ Next: Assign an Adjuster</div>
-                    The claim has been registered. Go to the <b>Adjuster Allocation</b> tab
-                    to complete Step 5 — the AI will score and recommend the best adjuster for this claim.
-                </div>
-                """, unsafe_allow_html=True)
+                if st.button("🕵️ Go to Adjuster Allocation →", type="primary", key="goto_adjuster_btn"):
+                    components.html("""
+                                        <script>
+                                            window.parent.document.querySelectorAll('[data-baseweb="tab"]')[3].click();
+                                        </script>
+                                        """, height=0)
 
 # ══════════════════════════════════════════════════════════
 #  TAB 3 — Draft Email
@@ -562,7 +619,7 @@ with tab3:
 
                 col1, col2 = st.columns(2)
                 with col1:
-                    if st.button("✅ Approve & Save to S3", type="primary", key="approve_btn"):
+                    if st.button("✅ Approve ", type="primary", key="approve_btn"):
                         s3 = boto3.client("s3", region_name=aws_region, verify=False)
                         claim_name = st.session_state.selected_claim.split("/")[-1].replace(".pdf", "")
                         draft_key = f"drafts/{claim_name}_email_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
@@ -583,7 +640,7 @@ with tab3:
             if st.session_state.email_approved:
                 st.markdown("""
                 <div class="alert alert-success" style="margin-top:12px;">
-                    <div class="alert-title">✅ Email Approved &amp; Saved</div>
+                    <div class="alert-title">✅ Email Approved </div>
                 </div>
                 """, unsafe_allow_html=True)
 

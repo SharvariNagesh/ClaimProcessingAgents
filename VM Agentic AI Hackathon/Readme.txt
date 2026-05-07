@@ -1,258 +1,211 @@
-Project Structure
-claim-agent-streamlit/
-├── app.py                          # Main Streamlit app
-├── agents/
-│   ├── __init__.py
-│   ├── extraction_agent.py
-│   ├── validation_agent.py
-│   ├── policy_agent.py
-│   ├── inow_agent.py
-│   └── hitl_agent.py
+
+============================================================
+  INSURANCE CLAIM PROCESSING AGENT — ARCHITECTURE & FLOW
+============================================================
+
+Tech Stack
+----------
+Layer               Technology                  Purpose
+---------           ----------                  -------
+Frontend            Streamlit                   4-tab UI, session state, human-in-the-loop controls
+Workflow Engine     LangGraph                   Phased agent orchestration (4 phases)
+LLM                 AWS Bedrock                 Field extraction, policy analysis, email drafting, adjuster scoring
+                    (openai.gpt-oss-120b-1:0)
+PDF Extraction      PyMuPDF (fitz)              Raw text extraction from claim PDFs
+File Storage        AWS S3                      Source PDFs, policy documents, approved email drafts
+State Management    Streamlit Session State     In-memory, no database needed
+
+
+Project Structure (Actual)
+--------------------------
+VM Agentic AI Hackathon/
+├── app.py                          # Main Streamlit app (4 tabs)
 ├── orchestrator/
-│   └── graph.py                    # LangGraph workflow
+│   └── graph.py                    # LangGraph 4-phase workflow builder
+├── agents/
+│   ├── extraction_agent.py         # Phase 1 — PDF text extraction (NO LLM)
+│   ├── validation_agent.py         # Phase 1 — Field extraction via LLM
+│   ├── hitl_agent.py               # Phase 1 — Missing fields email draft via LLM
+│   ├── policy_agent.py             # Phase 2 — Policy section analysis via LLM
+│   ├── inow_agent.py               # Phase 3 — Claim registration (NO LLM)
+│   └── adjuster_agent.py           # Phase 4 — Adjuster scoring via LLM
 ├── tools/
-│   ├── pdf_tools.py
-│   ├── aws_tools.py
-│   ├── inow_tools.py
-│   └── policy_tools.py
+│   └── aws_tools.py                # S3 helpers, required fields config
 ├── config/
-│   ├── required_fields.json
-│   └── settings.py
+│   ├── required_fields.json        # List of mandatory claim fields
+│   └── adjusters.json              # Adjuster profiles (region, expertise, experience)
+├── settings.py                     # AWS region, S3 bucket, model ID constants
 ├── requirements.txt
 ├── .env
-├── s3_sample_data/                 # Sample claims for demo
+└── Readme.txt
+
+
+LLM Usage Summary
+-----------------
+Agent                   Uses LLM?   Model                       Why
+-----                   ---------   -----                       ---
+extraction_agent        NO          —                           PyMuPDF handles raw text extraction
+validation_agent        YES         openai.gpt-oss-120b-1:0    Extracts structured fields from unstructured PDF text
+hitl_agent              YES         openai.gpt-oss-120b-1:0    Drafts professional email requesting missing fields
+policy_agent            YES         openai.gpt-oss-120b-1:0    Identifies policy sections relevant to the claim
+inow_agent              NO          —                           Deterministic mock claim ID generation (MD5 hash)
+adjuster_agent          YES         openai.gpt-oss-120b-1:0    Scores & ranks adjusters by region, expertise, complexity
+
+
+Complete 4-Phase Architecture Flow
+-----------------------------------
+
+┌─────────────────────────────────────────────────────────────────────┐
+│                        STREAMLIT APP                                │
+│                                                                     │
+│  Sidebar: S3 Bucket + AWS Region config                            │
+│                                                                     │
+│  Tab 1: Select Claim   Tab 2: View Results   Tab 3: Draft Email    │
+│  Tab 4: Adjuster Allocation                                         │
+└──────────────────────────────┬──────────────────────────────────────┘
+                               │
+                    User selects PDF from S3
+                    clicks "Process Claim"
+                               │
+                               ▼
+╔══════════════════════════════════════════════════════════════════════╗
+║  PHASE 1 — Extract & Validate  (LangGraph: build_phase1_graph)     ║
+╠══════════════════════════════════════════════════════════════════════╣
+║                                                                      ║
+║  ┌─────────────────────────────────────────────────────────────┐   ║
+║  │ extraction_agent  [NO LLM]                                  │   ║
+║  │ • Downloads PDF from S3                                     │   ║
+║  │ • Extracts raw text using PyMuPDF                           │   ║
+║  │ • Output: raw_text                                          │   ║
+║  └──────────────────────────────┬──────────────────────────────┘   ║
+║                                 ▼                                   ║
+║  ┌─────────────────────────────────────────────────────────────┐   ║
+║  │ validation_agent  [LLM]                                     │   ║
+║  │ • Sends raw_text to LLM                                     │   ║
+║  │ • Extracts structured fields (policy number, claimant,      │   ║
+║  │   cause of loss, loss date, location, claim type, etc.)     │   ║
+║  │ • Identifies missing required fields                        │   ║
+║  │ • Output: extracted_fields, missing_fields                  │   ║
+║  └──────────────────────────────┬──────────────────────────────┘   ║
+║                                 ▼                                   ║
+║              ┌──────────────────────────────┐                      ║
+║              │  Missing fields present?     │                      ║
+║              └────────┬─────────────────────┘                      ║
+║                       │                                             ║
+║            YES ───────┘──────── NO                                 ║
+║             ▼                    ▼                                  ║
+║  ┌──────────────────┐     STOP — UI prompts                        ║
+║  │ hitl_agent [LLM] │     user to continue                         ║
+║  │ • Flags missing  │     to Phase 2                               ║
+║  │   fields for     │                                              ║
+║  │   human review   │                                              ║
+║  │ • Email drafted  │                                              ║
+║  │   on user demand │                                              ║
+║  └──────────────────┘                                              ║
+╚══════════════════════════════════════════════════════════════════════╝
+                               │
+                    User clicks "Fetch Policy Sections"
+                               │
+                               ▼
+╔══════════════════════════════════════════════════════════════════════╗
+║  PHASE 2 — Policy Analysis  (LangGraph: build_phase2_graph)        ║
+╠══════════════════════════════════════════════════════════════════════╣
+║                                                                      ║
+║  ┌─────────────────────────────────────────────────────────────┐   ║
+║  │ policy_agent  [LLM]                                         │   ║
+║  │ • Fetches policy PDF from S3                                │   ║
+║  │ • Extracts full policy text via PyMuPDF                     │   ║
+║  │ • Sends policy text + claim description to LLM             │   ║
+║  │ • LLM returns only relevant policy sections                 │   ║
+║  │ • Output: policy_doc, relevant_policy_sections              │   ║
+║  └─────────────────────────────────────────────────────────────┘   ║
+╚══════════════════════════════════════════════════════════════════════╝
+                               │
+                    User clicks "Register Claim in INOW"
+                               │
+                               ▼
+╔══════════════════════════════════════════════════════════════════════╗
+║  PHASE 3 — Claim Registration  (LangGraph: build_phase3_graph)     ║
+╠══════════════════════════════════════════════════════════════════════╣
+║                                                                      ║
+║  ┌─────────────────────────────────────────────────────────────┐   ║
+║  │ inow_agent  [NO LLM]                                        │   ║
+║  │ • Generates deterministic claim ID (MD5 hash of fields)     │   ║
+║  │ • Simulates INOW system registration                        │   ║
+║  │ • Output: inow_claim_id, status = CLAIM_CREATED             │   ║
+║  └─────────────────────────────────────────────────────────────┘   ║
+╚══════════════════════════════════════════════════════════════════════╝
+                               │
+                    User clicks "Score & Recommend Adjuster"
+                               │
+                               ▼
+╔══════════════════════════════════════════════════════════════════════╗
+║  PHASE 4 — Adjuster Allocation  (LangGraph: build_phase4_graph)    ║
+╠══════════════════════════════════════════════════════════════════════╣
+║                                                                      ║
+║  ┌─────────────────────────────────────────────────────────────┐   ║
+║  │ adjuster_agent  [LLM]                                       │   ║
+║  │ • Loads all adjusters from config/adjusters.json            │   ║
+║  │ • Sends claim extracted_fields + adjuster profiles to LLM   │   ║
+║  │ • LLM scores each adjuster (0-100) based on:                │   ║
+║  │     - Geographic region match                               │   ║
+║  │     - Claim type expertise                                  │   ║
+║  │     - Loss complexity                                       │   ║
+║  │     - Years of experience                                   │   ║
+║  │ • Returns ranked list with reasoning per adjuster           │   ║
+║  │ • Output: adjuster_evaluation, recommended_adjuster         │   ║
+║  └──────────────────────────────┬──────────────────────────────┘   ║
+║                                 ▼                                   ║
+║         Human reviews AI recommendation in Tab 4                   ║
+║         Can override selection before confirming                    ║
+║         Output: assigned_adjuster (HUMAN_IN_LOOP confirmed)        ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+
+Tab 3 — Draft Email Flow (HITL)
+--------------------------------
+Triggered only when missing_fields are detected in Phase 1:
+
+  User clicks "Generate Draft Email"
+          ↓
+  hitl_agent calls LLM with list of missing fields
+          ↓
+  LLM drafts professional email to claimant
+          ↓
+  User reviews & edits email in Streamlit text area
+          ↓
+  ┌─ Approve & Save ──────────────────────────────────────┐
+  │  Saves to S3: drafts/<claim_name>_email_<timestamp>.txt│
+  │  Status → EMAIL_APPROVED                              │
+  └───────────────────────────────────────────────────────┘
+  ┌─ Reject & Regenerate ─────────────────────────────────┐
+  │  Clears draft, user can request a new one             │
+  └───────────────────────────────────────────────────────┘
+
+
+S3 Bucket Structure
+-------------------
+s3://<your-bucket>/
+├── claims/                         # Source claim PDFs
 │   ├── claim_001.pdf
-│   ├── claim_002.pdf
-│   └── claim_003.pdf
-└── README.md
-
-Tech Stack:
-------------
-
-Layer                Technology               Why
-Frontend            Streamlit                No React build, instant deployment, live updates
-Backend Logic       Python + LangGraph       Same agents as before
-LLM                 AWS Bedrock (Claude)    Same as before
-PDF Extract         PyMuPDF                  Fast, free, pure Python
-File Storage        S3                        Source of all data (PDFs + outputs)
-State               Streamlit Session State  In-memory, no database needed
-
-Complete Call Flow
-
-┌─────────────────────────────────────────────────────┐
-│ STREAMLIT APP (Single Process)                      │
-│                                                      │
-│ 1. Load & list PDFs from S3                        │
-│    st.selectbox() → ["claim_001.pdf", ...]         │
-│                                                      │
-│ 2. User clicks "Process Claim"                      │
-│    ↓                                                │
-│ 3. Download PDF from S3                            │
-│    ↓                                                │
-│ 4. Run LangGraph Workflow (All Agents in-memory)   │
-│    • Extraction Agent                              │
-│    • Validation Agent                              │
-│    • Policy Agent (or HITL Agent)                  │
-│    • INOW Agent                                    │
-│    ↓                                                │
-│ 5. MISSING FIELDS?                                 │
-│    ├─ YES: Show draft email in Streamlit           │
-│    │        User edits & clicks "Approve"          │
-│    │        Save to S3: drafts/claim_001_email.txt │
-│    │        STOP (wait for manual follow-up)       │
-│    │                                                │
-│    └─ NO: Continue to Policy Agent                 │
-│            → INOW Agent                            │
-│            → Show success with claim ID            │
-│                                                      │
-│ 6. Display results in Streamlit UI                 │
-│    • Extracted fields table                        │
-│    • Policy sections (if complete)                 │
-│    • INOW claim ID (if created)                    │
-│                                                      │
-└─────────────────────────────────────────────────────┘
+│   └── claim_002.pdf
+├── Policy/                         # Policy documents
+│   └── HP00000282-policy_document.pdf
+└── drafts/                         # Approved missing-field emails
+    └── claim_001_email_20240425_143022.txt
 
 
-
-==================
-# 1. Clone repo
-git clone <your-repo>
-cd claim-agent-streamlit
-
-# 2. Create virtual env
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# 3. Install dependencies
+Setup & Run
+-----------
+# 1. Install dependencies
 pip install -r requirements.txt
 
-# 4. Set AWS credentials
-export AWS_ACCESS_KEY_ID=your-key
-export AWS_SECRET_ACCESS_KEY=your-secret
-# OR use AWS CLI: aws configure
-
-# 5. Create .env file
-echo "AWS_REGION=us-east-1" > .env
-echo "S3_BUCKET=claims-bucket" >> .env
-
-# 6. Run Streamlit app
-streamlit run app.py
-
-# Opens at http://localhost:8501
-
-┌─────────────────────────────────────────────────────────┐
-│                   STREAMLIT APP                         │
-│                   (Single Python App)                   │
-├─────────────────────────────────────────────────────────┤
-│                                                          │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │ Sidebar: Configure S3 Bucket + AWS Region       │   │
-│  └──────────────────────────────────────────────────┘   │
-│                          ↓                               │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │ Tab 1: Select PDF from S3 Dropdown              │   │
-│  │ [claim_001.pdf, claim_002.pdf, ...]             │   │
-│  └──────────────────────────────────────────────────┘   │
-│                          ↓                               │
-│              Click "Process Claim"                       │
-│                          ↓                               │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │ LangGraph Workflow (In-Memory)                   │   │
-│  │ ┌─ Extraction Agent  ──────────────────────┐    │   │
-│  │ │ Download PDF from S3                     │    │   │
-│  │ │ Extract text with PyMuPDF                │    │   │
-│  │ └──────────────────────────────────────────┘    │   │
-│  │                     ↓                           │   │
-│  │ ┌─ Validation Agent ──────────────────────┐    │   │
-│  │ │ Use Bedrock Claude to extract fields    │    │   │
-│  │ │ Check for missing fields                │    │   │
-│  │ └──────────────────────────────────────────┘    │   │
-│  │                     ↓                           │   │
-│  │  ┌─ If Missing Fields ──┐  ┌─ If Complete ──┐  │   │
-│  │  │ HITL Agent           │  │ Policy Agent    │  │   │
-│  │  │ (Draft Email)        │  │ (Analysis)      │  │   │
-│  │  └──────────────────────┘  └─────────────────┘  │   │
-│  │                                                  │   │
-│  └──────────────────────────────────────────────────┘   │
-│                          ↓                               │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │ Tab 2: Display Results                           │   │
-│  │ • Extracted fields (table)                       │   │
-│  │ • Missing fields (alerts)                        │   │
-│  │ • Policy sections (if complete)                  │   │
-│  │ • INOW Claim ID (if created)                     │   │
-│  └──────────────────────────────────────────────────┘   │
-│                          ↓                               │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │ Tab 3: Draft Email (Human Review)                │   │
-│  │ • Show missing fields                            │   │
-│  │ • Allow editing of draft email                   │   │
-│  │ • "Approve & Save" button                        │   │
-│  │   → Saves to S3: drafts/claim_001_email.txt      │   │
-│  └──────────────────────────────────────────────────┘   │
-│                                                          │
-└─────────────────────────────────────────────────────────┘
-                          ↓↓↓
-                    AWS SERVICES
-                    
-    S3 Bucket              Bedrock
-    • PDFs                 • Claude LLM
-    • Draft Emails         • Field extraction
-                           • Policy analysis
-
-                           Sample test data
-s3://claims-bucket/
-├── claim_001.pdf
-├── claim_002.pdf
-├── claim_003.pdf
-└── drafts/
-    └── (draft emails saved here)
-
-Team work division
----------------------------------------------------------------------
-Developer 1 — "Frontend Specialist"
-├── Build Streamlit app structure (tabs, layout, styling)
-├── Design PDF selector dropdown
-├── Create results display UI
-└── Learn: Streamlit widgets, session state, CSS
-
-Developer 2 — "Orchestrator & Workflow"
-├── Build LangGraph workflow
-├── Implement extraction + validation agents
-├── Handle state transitions
-└── Learn: LangGraph, state management, Bedrock
-
-Developer 3 — "HITL & Email"
-├── Implement HITL agent (draft email generation)
-├── Draft email display in Streamlit
-├── Save approved drafts to S3
-└── Learn: LLM prompting, Streamlit text areas
-
-Developer 4 — "Policy & Integration"
-├── Implement policy agent
-├── Implement INOW agent
-├── AWS tools (S3, Bedrock)
-└── Learn: API integration, mock systems
-
-
-bash
-# Step 1: Setup
-git clone <repo>
-pip install -r requirements.txt
+# 2. Configure AWS credentials
 aws configure
-# Step 2: Add sample PDFs to S3
-aws s3 cp sample_claims/ s3://claims-bucket/ --recursive
-# Step 3: Run app
+# OR set in .env:
+#   AWS_REGION=us-east-1
+#   S3_BUCKET=your-bucket-name
+
+# 3. Run the app
 streamlit run app.py
-
-Complete File Tree (Final)
-==========================
-
-claim-agent-streamlit/
-├── app.py                           ✨ MAIN FILE (Run this!)
-├── orchestrator/
-│   └── graph.py
-├── agents/
-│   ├── extraction_agent.py
-│   ├── validation_agent.py
-│   ├── hitl_agent.py
-│   ├── policy_agent.py
-│   └── inow_agent.py
-├── tools/
-│   ├── pdf_tools.py
-│   ├── aws_tools.py
-│   └── inow_tools.py
-├── config/
-│   ├── required_fields.json
-│   └── settings.py
-├── requirements.txt
-├── .env
-├── .gitignore
-├── README.md
-└── sample_claims/
-    ├── claim_001.txt
-    ├── claim_002.txt
-    └── claim_003.txt
-
-Streamlit (Demo) → FastAPI Backend + React Frontend (Production)
-For now:
-✅ Streamlit reads from S3
-✅ LangGraph processes locally
-✅ Results displayed in Streamlit
-✅ Drafts saved back to S3
-✅ No database/email needed
-
-1. User opens app at localhost:85012.
-2. Sidebar shows: "S3 Bucket: claims-bucket"
-3. Tab 1 shows: [Select PDF dropdown]
-4. User picks: "claim_001.pdf"
-5. User clicks: "Process Claim"
-6. App shows: "🔄 Processing claim..."
-   • Extraction: ✅ 1500 chars extracted
-   • Validation: ✅ Checking fields...
-   • HITL: ⚠️ Missing phone number
-7. Tab 2 shows: Extracted fields table + missing list
-8. Tab 3 shows: Draft email (editable)
-9. User clicks: "Approve & Save Email"
-10. Email saved to: s3://claims-bucket/drafts/claim_001_email_20240425_143022.txt
-11. Success message: "✅ Email approved and saved to S3!"
+# Opens at http://localhost:8501
